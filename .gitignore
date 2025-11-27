@@ -1,0 +1,2 @@
+# 忽略 uav_data 文件夹下的数据
+uav_data/*
