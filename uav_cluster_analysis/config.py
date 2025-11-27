@@ -6,7 +6,7 @@
 DISTANCE_THRESHOLD = 7.0    # 距离阈值（米）
 ANGLE_THRESHOLD = 60        # 角度阈值（度）
 TIME_STEP = 1.0             # 时间步长（秒）
-START_TIME = 100            # 计算起始时间（秒）
+START_TIME = 70            # 计算起始时间（秒）
 END_TIME = 900             # 计算结束时间（秒），None表示使用数据最大时间
 
 # 实验配置
