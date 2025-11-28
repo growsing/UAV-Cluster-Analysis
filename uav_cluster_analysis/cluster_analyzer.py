@@ -88,6 +88,123 @@ def get_unified_timestep_data(all_uav_data, target_time, time_step):
     
     return unified_data
 
+def analyze_individual_cluster_sizes(all_uav_data, distance_thresh, angle_thresh, time_step=None, start_time=None, end_time=None):
+    """
+    分析每个个体在每一帧所处相关簇的大小变化
+    
+    Args:
+        all_uav_data: 所有无人机数据
+        distance_thresh: 距离阈值
+        angle_thresh: 角度阈值
+        time_step: 时间步长，如果为None则使用config中的设置
+        start_time: 起始时间，如果为None则使用config中的设置
+        end_time: 结束时间，如果为None则使用config中的设置
+    
+    Returns:
+        tuple: (cluster_sizes_time, time_steps_used)
+            cluster_sizes_time: 二维数组，shape=(时间步数, 无人机数量)
+            time_steps_used: 使用的时间步列表
+    """
+    if time_step is None:
+        time_step = TIME_STEP
+    if start_time is None:
+        start_time = START_TIME
+    if end_time is None:
+        end_time = END_TIME
+    
+    # 确定时间范围
+    from data_loader import get_time_range
+    min_time, max_time = get_time_range(all_uav_data)
+    
+    if min_time is None:
+        return np.array([]), []
+    
+    # 调整起始时间，确保不小于最小时间
+    actual_start_time = max(min_time, start_time)
+    
+    # 调整结束时间，确保不大于最大时间
+    if end_time is None:
+        actual_end_time = max_time
+    else:
+        actual_end_time = min(max_time, end_time)
+    
+    # 检查时间范围是否有效
+    if actual_start_time >= actual_end_time:
+        print(f"Error: Invalid time range. Start: {actual_start_time:.2f}s, End: {actual_end_time:.2f}s")
+        return np.array([]), []
+    
+    # 生成统一的时间步长序列（从start_time到end_time）
+    time_steps = np.arange(actual_start_time, actual_end_time, time_step)
+    n_timesteps = len(time_steps)
+    n_uavs = len(all_uav_data)
+    
+    # 初始化记录数组
+    cluster_sizes_time = np.zeros((n_timesteps, n_uavs), dtype=int)
+    
+    print(f"Analyzing individual cluster sizes over {n_timesteps} timesteps (from {actual_start_time:.2f}s to {actual_end_time:.2f}s)...")
+    
+    # 计算进度显示间隔
+    progress_interval = max(1, n_timesteps // PROGRESS_INTERVAL_DIVISOR)
+    
+    for i, target_time in enumerate(time_steps):
+        # 进度显示
+        if i % progress_interval == 0 or i == n_timesteps - 1:
+            print(f"Processing timestep {i}/{n_timesteps} (time = {target_time:.2f}s)")
+        
+        # 获取当前时间步的所有无人机数据
+        current_data = get_unified_timestep_data(all_uav_data, target_time, time_step)
+        
+        if len(current_data) < 2:  # 至少需要2架无人机才能形成簇
+            # 如果没有足够数据，所有个体簇大小为1
+            cluster_sizes_time[i, :] = 1
+            continue
+        
+        # 查找相关簇
+        clusters = find_correlated_clusters(current_data, distance_thresh, angle_thresh)
+        
+        # 记录每个个体所属簇的大小
+        for cluster in clusters:
+            cluster_size = len(cluster)
+            for uav_idx in cluster:
+                # 记录该簇中每个个体的簇大小
+                cluster_sizes_time[i, uav_idx] = cluster_size
+        
+        # 处理未在任何簇中的个体（簇大小为1）
+        for uav_idx in range(n_uavs):
+            if cluster_sizes_time[i, uav_idx] == 0:
+                cluster_sizes_time[i, uav_idx] = 1
+    
+    return cluster_sizes_time, time_steps
+
+def save_individual_cluster_sizes(cluster_sizes_time, time_steps, output_path):
+    """
+    保存个体簇大小数据，格式便于重新读取
+    
+    Args:
+        cluster_sizes_time: 二维数组，shape=(时间步数, 无人机数量)
+        time_steps: 时间步列表
+        output_path: 输出文件路径
+    """
+    n_timesteps, n_uavs = cluster_sizes_time.shape
+    
+    # 创建便于读取的数据格式
+    with open(output_path, 'w') as f:
+        # 写入文件头信息
+        f.write(f"# Individual Cluster Sizes Data\n")
+        f.write(f"# Time steps: {n_timesteps}\n")
+        f.write(f"# Number of UAVs: {n_uavs}\n")
+        f.write(f"# Time range: {time_steps[0]:.2f} to {time_steps[-1]:.2f}\n")
+        f.write(f"# Format: time, uav_0, uav_1, ..., uav_{n_uavs-1}\n")
+        
+        # 写入数据
+        for i, time_val in enumerate(time_steps):
+            line = f"{time_val:.2f}"
+            for uav_id in range(n_uavs):
+                line += f", {cluster_sizes_time[i, uav_id]}"
+            f.write(line + "\n")
+    
+    print(f"Individual cluster sizes saved to: {output_path}")
+
 def analyze_cluster_sizes(all_uav_data, distance_thresh, angle_thresh, time_step=None, start_time=None, end_time=None):
     """
     分析所有时间步的相关簇大小分布（统一时间步长）

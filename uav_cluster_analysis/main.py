@@ -6,8 +6,8 @@ import numpy as np
 import os
 from config import *
 from data_loader import load_all_uav_data, get_time_range
-from cluster_analyzer import analyze_cluster_sizes, analyze_cluster_duration
-from visualization import plot_cluster_size_distribution, plot_cluster_duration_distribution
+from cluster_analyzer import analyze_cluster_sizes, analyze_cluster_duration, analyze_individual_cluster_sizes
+from visualization import plot_cluster_size_distribution, plot_cluster_duration_distribution, plot_individual_cluster_sizes
 from utils import create_output_dir, get_output_path, calculate_probability_distribution
 
 def main():
@@ -68,6 +68,34 @@ def main():
             print(f"Warning: End time {END_TIME}s is after data end time {max_time:.2f}s")
             print(f"Using actual end time: {max_time:.2f}s")
     
+    # 分析每个个体簇大小随时间变化
+    print("\n" + "="*50)
+    print("Starting individual cluster size analysis...")
+    cluster_sizes_time, time_steps_used = analyze_individual_cluster_sizes(
+        all_uav_data, DISTANCE_THRESHOLD, ANGLE_THRESHOLD,
+        time_step=TIME_STEP, start_time=START_TIME, end_time=END_TIME
+    )
+    
+    if cluster_sizes_time.size > 0:
+        # 绘制个体簇大小变化图
+        plot_individual_cluster_sizes(
+            cluster_sizes_time, time_steps_used, 
+            DISTANCE_THRESHOLD, ANGLE_THRESHOLD, TIME_STEP, START_TIME,
+            show_plot=False
+        )
+        
+        # 保存个体簇大小数据（使用新格式）
+        if END_TIME is None:
+            output_file = f'individual_cluster_sizes_d{DISTANCE_THRESHOLD}_a{ANGLE_THRESHOLD}_ts{TIME_STEP}_start{START_TIME}.txt'
+        else:
+            output_file = f'individual_cluster_sizes_d{DISTANCE_THRESHOLD}_a{ANGLE_THRESHOLD}_ts{TIME_STEP}_start{START_TIME}_end{END_TIME}.txt'
+        
+        from cluster_analyzer import save_individual_cluster_sizes
+        save_individual_cluster_sizes(cluster_sizes_time, time_steps_used, get_output_path(output_file))
+        
+        print(f"Individual cluster size analysis completed. Data shape: {cluster_sizes_time.shape}")
+        print(f"Time range: {time_steps_used[0]:.2f}s - {time_steps_used[-1]:.2f}s")
+
     # 分析簇大小分布
     print("\n" + "="*50)
     print("Starting cluster size analysis...")
